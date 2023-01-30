@@ -1,0 +1,24 @@
+name: schism_viz
+channels:
+  - conda-forge
+dependencies:
+  - python=3.8
+  - ipykernel=6.17.1
+  - autopep8
+  - metpy
+  - schimpy
+  - xarray
+  - pandas
+  - hvplot
+  - cartopy
+  - shapely
+  - geopandas
+  - geoviews
+  - spatialpandas
+  - bokeh
+  - plotly
+  - matplotlib
+  - scikit-learn
+  - lxml
+  - html5lib
+prefix: /Users/nickysandhu/miniforge3/envs/mlp
