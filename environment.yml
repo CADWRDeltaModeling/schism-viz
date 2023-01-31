@@ -1,6 +1,7 @@
 name: schism_viz
 channels:
   - conda-forge
+  - cadwr-dms
 dependencies:
   - python=3.8
   - ipykernel=6.17.1
