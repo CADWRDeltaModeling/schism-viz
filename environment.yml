@@ -22,4 +22,5 @@ dependencies:
   - scikit-learn
   - lxml
   - html5lib
+  - notebook # needed for dashboard panel
 prefix: /Users/nickysandhu/miniforge3/envs/mlp
