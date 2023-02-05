@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>A work in progress… &mdash; Schism Vizualization using python libraries 1.0.alpha documentation</title>
+      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+      <link rel="stylesheet" href="_static/css/custom.css" type="text/css" />
+      <link rel="stylesheet" href="_static/design-style.4045f2051d55cab465a707391d5b2007.min.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/sphinx_highlight.js"></script>
+        <script src="_static/design-tabs.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="#" class="icon icon-home"> Schism Vizualization using python libraries
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">A work in progress…</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="#">Schism Vizualization using python libraries</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="#" class="icon icon-home"></a></li>
+      <li class="breadcrumb-item active">A work in progress…</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/index.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="a-work-in-progress">
+<span id="getstart"></span><h1>A work in progress…<a class="headerlink" href="#a-work-in-progress" title="Permalink to this heading"></a></h1>
+<p>This repo has a number of example notebooks which give simple examples. As those functionality evolves, the scripts in schism_viz
+house common functions</p>
+<p>The notebooks found in the <a class="reference external" href="https://github.com/CADWRDeltaModeling/schism-viz">github repository</a> contain the following exercises:</p>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">conda env create --name schism_viz -f environment.yml</span>
+</pre></div>
+</div>
+<p>This creates a new environment called “schism_viz” which contains the necessary packages to run through these modules.</p>
+<section id="notebook-examples">
+<h2>Notebook Examples<a class="headerlink" href="#notebook-examples" title="Permalink to this heading"></a></h2>
+<p>The data is from running <a class="reference external" href="https://cadwrdeltamodeling.github.io/HelloSCHISM/html/helloschism.html">Module of 1 of HelloSchism</a></p>
+<blockquote>
+<div><ul class="simple">
+<li><p><a class="reference external" href="_static/html/00_mesh_view_3D.html">View mesh in 3D</a></p></li>
+</ul>
+<img alt="_images/3dmesh.gif" src="_images/3dmesh.gif" />
+<ul class="simple">
+<li><p><a class="reference external" href="_static/html/01_water_surface_elevation_animation.html">Animate water surface elevation in 3D</a></p></li>
+</ul>
+<img alt="_images/water_surface_3d_animation.gif" src="_images/water_surface_3d_animation.gif" />
+<ul class="simple">
+<li><p><a class="reference external" href="_static/html/02_salinity_animation.html">Salinity animation with colors</a></p></li>
+</ul>
+<img alt="_images/salinity_color_animation.gif" src="_images/salinity_color_animation.gif" />
+<ul class="simple">
+<li><p><a class="reference external" href="_static/html/03_velocity_vectors.html">Velocity vectors with arrows and colors</a></p></li>
+</ul>
+<img alt="_images/velocity_vector_arrow_color_animation.gif" src="_images/velocity_vector_arrow_color_animation.gif" />
+<ul class="simple">
+<li><p><a class="reference external" href="_static/html/04_salinity_and_velocity_animation.html">Overlaying the two animations above</a></p></li>
+</ul>
+<img alt="_images/velocity_salinity_animation.gif" src="_images/velocity_salinity_animation.gif" />
+<ul class="simple">
+<li><p><a class="reference external" href="_static/html/07_networkx.html">Represent mesh as a networkx graph</a></p></li>
+<li><p><a class="reference external" href="_static/html/08_view_mesh_fast.html">Faster 2D mesh display</a></p></li>
+<li><p><a class="reference external" href="_static/html/09_stations_map.html">Stations Map with mesh</a>
+Overlaying the stations as points onto the 2D mesh display</p></li>
+</ul>
+</div></blockquote>
+<div class="toctree-wrapper compound">
+</div>
+</section>
+</section>
+<section id="indices-and-tables">
+<h1>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Permalink to this heading"></a></h1>
+<ul class="simple">
+<li><p><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></p></li>
+<li><p><a class="reference internal" href="py-modindex.html"><span class="std std-ref">Module Index</span></a></p></li>
+<li><p><a class="reference internal" href="search.html"><span class="std std-ref">Search Page</span></a></p></li>
+</ul>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, Nicky Sandhu, Kijin Nam.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
