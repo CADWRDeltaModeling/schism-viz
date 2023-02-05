@@ -1,0 +1,33 @@
+name: schism_viz
+channels:
+  - conda-forge
+  - cadwr-dms
+dependencies:
+  - python=3.8
+  - pip
+  - ipykernel=6.17.1
+  - autopep8
+  - metpy
+  - schimpy
+  - xarray
+  - pandas
+  - hvplot
+  - cartopy
+  - shapely
+  - geopandas
+  - geoviews
+  - spatialpandas
+  - bokeh
+  - plotly
+  - matplotlib
+  - scikit-learn
+  - lxml
+  - html5lib
+  - notebook # needed for dashboard panel
+  - autopep8
+  - sphinx
+  - sphinx_rtd_theme
+  - pandoc
+  - pip:
+    - sphinx_design
+
