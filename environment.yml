@@ -13,6 +13,9 @@ dependencies:
   - xarray
   - pandas
   - hvplot
+  - ipywidgets # pyvista requires trame which requires ipywidgets
+  - trame
+  - pyvista # 3D plots
   - cartopy
   - shapely
   - geopandas
