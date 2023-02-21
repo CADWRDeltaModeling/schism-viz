@@ -16,7 +16,6 @@ from schimpy import split_quad
 from . import schism_study
 from . import schout_reader
 
-
 class SchismMeshNew:
     def is_pure_tri(self):
         return True

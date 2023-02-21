@@ -42,8 +42,8 @@ def get_config():
     cfg.VCS = "git"
     cfg.style = ""
     cfg.tag_prefix = ""
-    cfg.parentdir_prefix = "schism_viz-"
-    cfg.versionfile_source = "schism_viz/_version.py"
+    cfg.parentdir_prefix = "schismviz-"
+    cfg.versionfile_source = "schismviz/_version.py"
     cfg.verbose = False
     return cfg
 

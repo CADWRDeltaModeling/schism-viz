@@ -2,10 +2,10 @@
 
 A collection of holoviews visualizations for SCHISM
 
-Docs are at https://cadwrdeltamodeling.github.io/schism-viz/html/index.html
+Docs are at https://cadwrdeltamodeling.github.io/schismviz/html/index.html
 
 
-# Live examples 
+# Live examples
  0. [Mesh View 3D](https://schism.azurewebsites.net/00_mesh_view_3D)
  1. [Water Surface Elevation Animation](https://schism.azurewebsites.net/01_water_surface_elevation_animation)
  2. [Salinity Animation](https://schism.azurewebsites.net/02_salinity_animation)

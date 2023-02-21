@@ -1,4 +1,4 @@
-name: schism_viz
+name: schismviz
 channels:
   - pyviz # conda-forge causing issues ? https://discourse.holoviz.org/t/blank-output-with-latest-holoviz-from-conda-forge/2276/5
   - conda-forge

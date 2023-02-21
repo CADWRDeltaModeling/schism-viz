@@ -1,5 +1,5 @@
 from argparse import ArgumentParser
-from schism_viz import __version__
+from schismviz import __version__
 
 def subcommand1(args):
     print('Do something with subcommand 1', args)
@@ -14,7 +14,7 @@ def cli(args=None):
         '-V', '--version',
         action='version',
         help='Show the conda-prefix-replacement version number and exit.',
-        version="schism_viz %s" % __version__,
+        version="schismviz %s" % __version__,
     )
 
     # do something with the sub commands
@@ -27,7 +27,7 @@ def cli(args=None):
     # Now call the appropriate response.
     pargs = p.parse_args(args)
     pargs.func(pargs)
-    return 
+    return
     # No return value means no error.
     # Return a value of 1 or higher to signify an error.
     # See https://docs.python.org/3/library/sys.html#sys.exit
