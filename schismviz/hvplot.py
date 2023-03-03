@@ -13,7 +13,7 @@ import holoviews as hv
 from holoviews.operation.datashader import rasterize
 from typing import Tuple
 
-__all__ = ['create_mesh_plot', 'create_plot_with_point_select']
+__all__ = ['plot_mesh', 'plot_mesh_with_point_select']
 
 
 def plot_mesh(ds_out2d: xr.Dataset, dataarray: xr.DataArray):
@@ -48,7 +48,7 @@ def plot_mesh(ds_out2d: xr.Dataset, dataarray: xr.DataArray):
     return plot
 
 
-def plot_mesh_with_point_select(ds_out2d, dataarray):
+def plot_mesh_with_point_select(ds_out2d, dataarray, da_zcoord=None):
     """ Create a dynamic HoloViews 2D TriMesh plot with a point selector to plot
     a time series plot at the nearest node from the selected point.
 
@@ -76,7 +76,7 @@ def plot_mesh_with_point_select(ds_out2d, dataarray):
     >>> p = plot_mesh(ds_out2d, ds_out2d.elevation)
     """
     meshobj = HvTriMeshWithPointer(ds_out2d)
-    plot = meshobj.create_plot(dataarray)
+    plot = meshobj.create_plot(dataarray, da_zcoord)
 
     return plot
 
@@ -111,23 +111,36 @@ class HvTriMesh:
         times = [time_basis + datetime.timedelta(seconds=t) for t in da.time.values]
         return times
 
-    def dynamic_mesh(self, dataarray, index):
-        self.nodes.data[:, -1] = dataarray.sel(time=index).values
+    def dynamic_mesh(self, dataarray, index, level=-1):
+        da_t = dataarray.sel(time=index)
+        if self.dim == 2:
+            self.nodes.data[:, -1] = da_t.values
+        elif self.dim == 3:
+            self.nodes.data[:, -1] = da_t.sel(nSCHISM_vgrid_layers=level).values
         mesh = hv.TriMesh((self.ux_grid.ds.Mesh2_face_nodes.values, self.nodes))
         return mesh
 
     def prepare_plot(self, dataarray: xr.DataArray):
         times = self.create_timestamps(dataarray)
         self.dataarray = dataarray.assign_coords(time=times)
+        self.dim = len(self.dataarray.dims)
         self.dim_time = hv.Dimension('time', values=times)
+        if self.dim == 3:
+            self.dim_level = hv.Dimension('level',
+                                          values=dataarray.nSCHISM_vgrid_layers.values)
 
     def create_plot(self, dataarray: xr.DataArray):
         """ Create a TriMesh plot
         """
         self.prepare_plot(dataarray)
-        plot = rasterize(hv.DynamicMap(lambda i: self.dynamic_mesh(self.dataarray, i),
-                                       kdims=self.dim_time))
-
+        if self.dim == 2:
+            plot = rasterize(hv.DynamicMap(lambda t: self.dynamic_mesh(self.dataarray, t),
+                                           kdims=self.dim_time))
+        elif self.dim == 3:
+            plot = rasterize(hv.DynamicMap(lambda t, l: self.dynamic_mesh(self.dataarray, t, l),
+                                           kdims=[self.dim_time, self.dim_level]))
+        else:
+            raise ValueError("DataArray must be 2D or 3D")
         return plot
 
 
@@ -162,37 +175,79 @@ class HvTriMeshWithPointer(HvTriMesh):
             data=selected_points.columns(), num_objects=1, source=selected_points)
         return selected_points, point_stream
 
-    def find_nearest_node(self, elem_i, pos):
+    def find_nearest_node_in_element(self, elem_i, pos):
         nodes_i = self.ux_grid.ds.Mesh2_face_nodes[elem_i, :].values[0]
         pts = [Point(self.node_coordinates[n_i, :2]) for n_i in nodes_i]
         p_pos = Point(pos)
         dists = [p.distance(p_pos) for p in pts]
         return nodes_i[np.argmin(dists)]
 
-    def dynamic_curve(self, dataarray, data):
+    def get_nearest_node(self, data):
+        pos = (data['x'][0], data['y'][0])
+        elem_i = self.elem_strtree.query(Point(pos), predicate='intersects')
+        node_i = self.find_nearest_node_in_element(elem_i, pos)
+        return node_i
+
+    def dynamic_curve(self, dataarray, level, data):
         if len(data['x']) == 0:
             # Need to provide a dummy x values for datetime
             p = hv.Curve((dataarray.time.isel(time=0), [0.]))
             return p
-        pos = (data['x'][0], data['y'][0])
-        elem_i = self.elem_strtree.query(Point(pos), predicate='intersects')
-        node_i = self.find_nearest_node(elem_i, pos)
-        p = hv.Curve((dataarray.time, dataarray.sel(nSCHISM_hgrid_node=node_i)))
+        node_i = self.get_nearest_node(data)
+        if self.dim == 2:
+            p = hv.Curve((dataarray.time, dataarray.sel(nSCHISM_hgrid_node=node_i)))
+        elif self.dim == 3:
+            p = hv.Curve((dataarray.time, dataarray.sel(nSCHISM_hgrid_node=node_i,
+                                                        nSCHISM_vgrid_layers=level)))
         return p
 
-    def create_plot(self, dataarray: xr.DataArray):
-        self.prepare_plot(dataarray)
+    def dynamic_profile(self, dataarray, da_zcoord, index, data):
+        if len(data['x']) == 0:
+            # Need to provide a dummy x values for datetime
+            p = hv.Curve((dataarray.time.isel(time=0), [0.]))
+            return p
+        node_i = self.get_nearest_node(data)
+        p = hv.Curve((dataarray.sel(time=index, nSCHISM_hgrid_node=node_i),
+                      da_zcoord.sel(time=index, nSCHISM_hgrid_node=node_i)))
+        return p
+
+    def prepare_plot(self, dataarray: xr.DataArray, zcoord: xr.DataArray = None):
+        super().prepare_plot(dataarray)
+        if self.dim == 3:
+            self.zcoord = zcoord.assign_coords(time=self.dim_time.values)
+
+    def create_plot(self, dataarray: xr.DataArray, zcoord: xr.DataArray = None):
+        self.prepare_plot(dataarray, zcoord)
         self.selected_points, self.point_stream = self.create_select_points()
-        mesh = rasterize(hv.DynamicMap(lambda i: self.dynamic_mesh(self.dataarray, i),
-                                       kdims=self.dim_time))
-        curve = hv.DynamicMap(lambda data:
-                              self.dynamic_curve(self.dataarray, data),
-                              streams=[self.point_stream]).opts(framewise=True)
+        if self.dim == 2:
+            mesh = rasterize(hv.DynamicMap(lambda i: self.dynamic_mesh(self.dataarray, i),
+                                           kdims=self.dim_time))
+            curve = hv.DynamicMap(lambda data:
+                                self.dynamic_curve(self.dataarray, 0, data),
+                                streams=[self.point_stream]).opts(framewise=True)
+        elif self.dim == 3:
+            mesh = rasterize(hv.DynamicMap(lambda i, j: self.dynamic_mesh(self.dataarray, i, j),
+                                           kdims=[self.dim_time, self.dim_level]))
+            curve = hv.DynamicMap(lambda l, data:
+                                  self.dynamic_curve(self.dataarray, l, data),
+                                  kdims=self.dim_level,
+                                  streams=[self.point_stream]).opts(framewise=True)
+            profile = hv.DynamicMap(lambda i, data:
+                                    self.dynamic_profile(self.dataarray, self.zcoord, i, data),
+                                    kdims=self.dim_time,
+                                    streams=[self.point_stream]).opts(framewise=True)
+        else:
+            raise ValueError("DataArray must be 2D or 3D")
+
         mesh_with_pointer = (mesh * self.selected_points).opts(
             hv.opts.Layout(merge_tools=False),
             hv.opts.Points(active_tools=['point_draw']))
+        if self.dim == 2:
+            layout = (mesh_with_pointer + curve).cols(1)
+        if self.dim == 3:
+            layout = (mesh_with_pointer + curve + profile).cols(1)
 
-        return (mesh_with_pointer + curve).opts(shared_axes=False).cols(1)
+        return layout.opts(shared_axes=False)
 
 
 def triangulate(face_node_connectivity: np.ndarray,
