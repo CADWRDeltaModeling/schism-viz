@@ -9,6 +9,7 @@ import xarray as xr
 import uxarray as ux
 from shapely.geometry import Polygon, Point
 from shapely.strtree import STRtree
+import networkx as nx
 import holoviews as hv
 from holoviews.operation.datashader import rasterize
 from typing import Tuple
@@ -73,9 +74,42 @@ def plot_mesh_with_point_select(ds_out2d, dataarray, da_zcoord=None):
 
     Examples
     --------
-    >>> p = plot_mesh(ds_out2d, ds_out2d.elevation)
+    >>> p = plot_mesh_with_point_select(ds_out2d, ds_out2d.elevation)
     """
     meshobj = HvTriMeshWithPointer(ds_out2d)
+    plot = meshobj.create_plot(dataarray, da_zcoord)
+
+    return plot
+
+
+def plot_mesh_with_path_select(ds_out2d, dataarray, da_zcoord=None):
+    """ Create a dynamic HoloViews 2D TriMesh plot with a point selector to plot
+    a time series plot at the nearest node from the selected point.
+
+    Plot a HoloViews TrimMesh colored with values from the DataArray using
+    the mesh information from ds_out2d.
+    The function assumes that the dimensions and the coordinates from ds_out2d
+    and dataarray agree.
+
+    NOTE: This function supports only 2D value DataArray at the moment.
+
+    Parameters
+    ----------
+    ds_out2d: xarray.Dataset
+        Dataset containing the mesh information. Use any one of out2d files from
+        SCHISM outputs.
+    dataarray: xarray.DataArray
+        DataArray containing the values to be plotted.
+
+    Returns
+    -------
+    HoloViews plot
+
+    Examples
+    --------
+    >>> p = plot_mesh_with_point_select(ds_out2d, ds_out2d.elevation)
+    """
+    meshobj = HvTriMeshWithPathSelector(ds_out2d)
     plot = meshobj.create_plot(dataarray, da_zcoord)
 
     return plot
@@ -250,6 +284,136 @@ class HvTriMeshWithPointer(HvTriMesh):
         return layout.opts(shared_axes=False)
 
 
+class HvSelectorMixin:
+    def _process_mesh(self):
+        super()._process_mesh()
+        self.elem_polygons = None
+        self.node_points = None
+        self.build_strtree_of_elements()
+        self.build_strtree_of_points()
+
+    def build_strtree_of_elements(self):
+        if self.elem_polygons is None:
+            self.elem_polygons = xr.apply_ufunc(lambda x: Polygon(self.node_coordinates[x, :2]),
+                self.ux_grid.ds.Mesh2_face_nodes,
+                input_core_dims=(('three',),), vectorize=True)
+            self.elem_strtree = STRtree(self.elem_polygons.values)
+        return self.elem_strtree
+
+    def build_strtree_of_points(self):
+        if self.node_points is None:
+            self.node_points = [Point(x) for x in self.node_coordinates[:, :2]]
+            self.node_strtree = STRtree(self.node_points)
+        return self.node_strtree
+
+    def find_nearest_node_in_element(self, elem_i, pos):
+        nodes_i = self.ux_grid.ds.Mesh2_face_nodes[elem_i, :].values[0]
+        pts = [Point(self.node_coordinates[n_i, :2]) for n_i in nodes_i]
+        p_pos = Point(pos)
+        dists = [p.distance(p_pos) for p in pts]
+        return nodes_i[np.argmin(dists)]
+
+    def get_nearest_node(self, data):
+        pos = (data['x'][0], data['y'][0])
+        elem_i = self.elem_strtree.query(Point(pos), predicate='intersects')
+        node_i = self.find_nearest_node_in_element(elem_i, pos)
+        return node_i
+
+    def prepare_plot(self, dataarray: xr.DataArray, zcoord: xr.DataArray = None):
+        super().prepare_plot(dataarray)
+        if self.dim == 3:
+            self.zcoord = zcoord.assign_coords(time=self.dim_time.values)
+
+
+class HvTriMeshWithPathSelector(HvSelectorMixin, HvTriMesh):
+    def __init__(self, ds_out2d: xr.Dataset):
+        super().__init__(ds_out2d)
+
+    def _process_mesh(self):
+        super()._process_mesh()
+        self.graph_edges = build_edge_graph_from_uxgrid(self.ux_grid)
+
+    def create_select_path(self):
+        selected_path = hv.Path([])
+        path_stream = hv.streams.PolyDraw(num_objects=1,
+                                          source=selected_path, show_vertices=True)
+        return selected_path, path_stream
+
+    def find_nodes(self, data):
+        vert_x = data['xs'][0]
+        vert_y = data['ys'][0]
+        verts = list(zip(vert_x, vert_y))
+        nodes_i = []
+        for vert in verts:
+            elem_i = self.elem_strtree.query(Point(vert), predicate='intersects')
+            node_i = self.find_nearest_node_in_element(elem_i, vert)
+            nodes_i.append(node_i)
+        return nodes_i
+
+    def find_nodestring(self, nodes_i):
+        nodestring = []
+        for i in range(len(nodes_i) - 1):
+            p = nx.shortest_path(self.graph_edges, nodes_i[i], nodes_i[i + 1])
+            nodestring.extend(p)
+        return nodestring
+
+    def dynamic_xsection(self, dataarray, da_zcoord, index, data):
+        if self.dim == 2:
+            p = hv.Curve()
+        elif self.dim == 3:
+            if data is None or len(data['xs']) < 1:
+                s = np.zeros((2, 2))
+                return hv.QuadMesh((s, s, s))
+            ns = self.find_nodes(data)
+            # calculate distances along the path
+            x = self.node_coordinates[ns, :]
+            print(x)
+            s = [0., ]
+            for i in range(x.shape[0] - 1):
+                len_segment = np.linalg.norm(x[i + 1, :2] - x[i, :2])
+                s.append(len_segment + s[i])
+            print(s)
+            ys = self.zcoord.sel(time=index, nSCHISM_hgrid_node=ns).values
+            ss = np.broadcast_to(np.array(s).reshape(-1, 1), ys.shape)
+            zs = dataarray.sel(time=index, nSCHISM_hgrid_node=ns).values
+            print(ys.shape)
+            print(ss)
+            print(zs)
+            p = hv.QuadMesh((ss, ys, zs))
+        else:
+            raise NotImplementedError()
+        return p
+
+    def create_plot(self, dataarray: xr.DataArray, zcoord: xr.DataArray = None):
+        self.prepare_plot(dataarray, zcoord)
+        self.selected_path, self.path_stream = self.create_select_path()
+        if self.dim == 2:
+            mesh = rasterize(hv.DynamicMap(lambda i: self.dynamic_mesh(self.dataarray, i),
+                                           kdims=self.dim_time))
+            profile = hv.DynamicMap(lambda data:
+                                self.dynamic_xsection(self.dataarray, 0, data),
+                                streams=[self.path_stream]).opts(framewise=True)
+        elif self.dim == 3:
+            mesh = rasterize(hv.DynamicMap(lambda i, j: self.dynamic_mesh(self.dataarray, i, j),
+                                           kdims=[self.dim_time, self.dim_level]))
+            profile = hv.DynamicMap(lambda i, data:
+                                    self.dynamic_xsection(self.dataarray, self.zcoord, i, data),
+                                    kdims=self.dim_time,
+                                    streams=[self.path_stream]).opts(framewise=True)
+        else:
+            raise ValueError("DataArray must be 2D or 3D")
+
+        mesh_with_path = (mesh * self.selected_path).opts(
+            hv.opts.Layout(merge_tools=False),
+            hv.opts.Path(color='red'))
+        if self.dim == 2:
+            layout = (mesh_with_path + profile).cols(1)
+        if self.dim == 3:
+            layout = (mesh_with_path + profile).cols(1)
+
+        return layout.opts(shared_axes=False)
+
+
 def triangulate(face_node_connectivity: np.ndarray,
                 fill_value: int) -> Tuple[np.ndarray, np.ndarray]:
     """ Create new triangle connectivity from hybrid mesh face-node connectivity
@@ -400,3 +564,27 @@ def make_uxgrid(ds: xr.Dataset) -> ux.Grid:
     ds.Mesh2.attrs['_FillValue'] = -1
     grid2d = ux.Grid(ds, islation=False, mesh_type="ugrid")
     return grid2d
+
+
+def build_edge_graph_from_uxgrid(ux_grid: ux.Grid):
+    """ Build a NetworkX graph of edges from a uxarray grid
+
+    Build a NetworkX graph of edges from a SCHISM uxarray grid. The indices
+    in the graph are 0-based.
+
+    Parameters
+    ----------
+    ux_grid: uxarray.Grid
+
+    Returns
+    -------
+    g: networkx.Graph
+    """
+    if 'Mesh2_face_nodes' not in list(ux_grid.ds.keys()):
+        raise ValueError("The dataset does not have Mesh2_face_nodes. Triangulae the grid first.")
+
+    # Build a NetworkX graph of edges
+    g = nx.Graph()
+    g.add_nodes_from(np.unique(ux_grid.ds.SCHISM_hgrid_edge_nodes.values) - 1)
+    g.add_edges_from(ux_grid.ds.SCHISM_hgrid_edge_nodes.values - 1)
+    return g
