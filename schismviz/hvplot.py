@@ -365,20 +365,16 @@ class HvTriMeshWithPathSelector(HvSelectorMixin, HvTriMesh):
                 s = np.zeros((2, 2))
                 return hv.QuadMesh((s, s, s))
             ns = self.find_nodes(data)
+            ns = self.find_nodestring(ns)
             # calculate distances along the path
             x = self.node_coordinates[ns, :]
-            print(x)
             s = [0., ]
             for i in range(x.shape[0] - 1):
                 len_segment = np.linalg.norm(x[i + 1, :2] - x[i, :2])
                 s.append(len_segment + s[i])
-            print(s)
             ys = self.zcoord.sel(time=index, nSCHISM_hgrid_node=ns).values
             ss = np.broadcast_to(np.array(s).reshape(-1, 1), ys.shape)
             zs = dataarray.sel(time=index, nSCHISM_hgrid_node=ns).values
-            print(ys.shape)
-            print(ss)
-            print(zs)
             p = hv.QuadMesh((ss, ys, zs))
         else:
             raise NotImplementedError()
