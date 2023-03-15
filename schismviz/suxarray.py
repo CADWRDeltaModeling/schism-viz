@@ -7,12 +7,18 @@ import numpy as np
 import pandas as pd
 import numba
 import xarray as xr
+from shapely.geometry import Polygon, Point
+from shapely.strtree import STRtree
 import uxarray as ux
 
 
 class Grid(ux.Grid):
     """ uxarray Grid class for SCHISM
     """
+    elem_polygons = None
+    elem_strtree = None
+    node_points = None
+    node_strtree = None
 
     def __init__(self, dataset, **kwargs):
         """ Initialize a Grid object
@@ -59,6 +65,66 @@ class Grid(ux.Grid):
         ds[varname].attrs['start_index'] = 1
         ds[varname].attrs['_FillValue'] = -1
         return ds
+
+    def build_spatial_trees(self):
+        """ Build spatial tree for the nodes and the elements of the grid
+        """
+        self.elem_strtree = self.build_elem_spatial_tree()
+        self.node_strtree = self.build_node_spatial_tree()
+
+    def build_elem_spatial_tree(self):
+        """ Build spatial tree for the elements of the grid """
+        # If the spatial tree is not built yet, build it
+        if self.elem_polygons is None:
+            node_x = self.ds[self.ds_var_names['Mesh2_node_x']].values
+            node_y = self.ds[self.ds_var_names['Mesh2_node_y']].values
+
+            def create_polygon(node_indices):
+                # The node indices are 1-based
+                ind = node_indices[node_indices > 0] - 1
+                # Assuming the indices are positional
+                return Polygon(zip(node_x[ind], node_y[ind]))
+            self.elem_polygons = xr.apply_ufunc(create_polygon,
+                self.ds[self.ds_var_names['Mesh2_face_nodes']],
+                input_core_dims=((self.ds_var_names['nMaxMesh2_face_nodes'],),),
+                vectorize=True)
+            self.elem_strtree = STRtree(self.elem_polygons.values)
+        return self.elem_strtree
+
+    def build_node_spatial_tree(self):
+        node_x = self.ds[self.ds_var_names['Mesh2_node_x']].values
+        node_y = self.ds[self.ds_var_names['Mesh2_node_y']].values
+
+        def create_point(node_index):
+            ind = node_index - 1
+            return Point(node_x[ind], node_y[ind])
+        self.node_points = [create_point(i) for i in range(
+            self.ds.dims[self.ds_var_names['nMesh2_node']])]
+        self.node_strtree = STRtree(self.node_points)
+        return self.node_strtree
+
+    def find_element_at(self, x, y, predicate='intersects'):
+        """ Find the element that contains the point (x, y)
+
+        Parameters
+        ----------
+        x : float, required
+            x coordinate
+        y : float, required
+            y coordinate
+        predicate : str, optional
+            Predicate to use for the spatial query by shapely STRtree.
+            Default is 'contains'
+
+        Returns
+        -------
+        elem : array_like
+            Element indices
+        """
+        if self.elem_strtree is None:
+            self.build_elem_spatial_tree()
+        point = Point(x, y)
+        return self.elem_strtree.query(point, predicate=predicate)
 
 
 def get_topology_variable(dataset):
@@ -169,8 +235,10 @@ def read_hgrid_gr3(path_hgrid):
     ds['SCHISM_hgrid_node_y'] = xr.DataArray(data=df_nodes[2].values, dims="nSCHISM_hgrid_node")
     # Replace NaN with -1
     df_faces = df_faces.fillna(-1)
-    ds['SCHISM_hgrid_face_nodes'] = xr.DataArray(data=df_faces[[2, 3, 4, 5]].values,
-                                                 dims=("nSCHISM_hgrid_face", "nMaxSCHISM_hgrid_face_nodes"))
+    ds['SCHISM_hgrid_face_nodes'] = xr.DataArray(data=df_faces[[2, 3, 4, 5]].astype(int).values,
+                                                 dims=("nSCHISM_hgrid_face",
+                                                       "nMaxSCHISM_hgrid_face_nodes"),
+                                                 attrs={"_FillValue": -1})
     # Add dummy mesh_topology variable
     ds = Grid.add_topology_variable(ds)
 

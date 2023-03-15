@@ -1,4 +1,5 @@
 from pathlib import Path
+import numpy as np
 import xarray as xr
 import pytest
 import schismviz.suxarray as sx
@@ -53,3 +54,13 @@ def test_read_hgrid_gr3():
     # assert grid.ds.dims['nSCHISM_hgrid_edge'] == 10416
     # assert grid.ds.dims['nSCHISM_hgrid_max_face_nodes'] == 3
     # assert grid.ds.dims['nSCHISM_hgrid_max_edge_nodes'] == 2
+
+
+def test_find_element_at_position(test_grid):
+    """ Test find_element_at """
+    # When a point is inside an element
+    elem_ind = test_grid.find_element_at(2., 1.)
+    assert np.all(elem_ind == np.array([123]))
+    # When a point is on a boundary of two elements
+    elem_ind = test_grid.find_element_at(0., 0.)
+    assert np.all(elem_ind == np.array([39, 123]))
