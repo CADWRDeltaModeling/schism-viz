@@ -21,11 +21,7 @@ def test_get_topology_variable():
     p_cur = Path(__file__).parent.absolute()
     ds = xr.open_dataset(str(p_cur / "testdata/out2d_1.nc"))
     da = sx.get_topology_variable(ds)
-    assert da is None
-    # Add a dummy topology variable
-    ds = sx.Grid.add_topology_variable(ds)
-    da = sx.get_topology_variable(ds)
-    assert da.name == 'SCHISM'
+    assert da.name == 'SCHISM_hgrid'
 
 
 @pytest.fixture
@@ -41,6 +37,24 @@ def test_triangulate(test_grid):
     grid_tri = sx.triangulate(test_grid)
     assert grid_tri.ds.dims['nSCHISM_hgrid_node'] == 112
     assert grid_tri.ds.dims['nSCHISM_hgrid_face'] == 168
+
+
+@pytest.fixture
+def test_out2d_dask():
+    """ Test out2d_dask fixture """
+    p_cur = Path(__file__).parent.absolute()
+    path_files = [str(p_cur / "testdata/out2d_{}.nc".format(i))
+                  for i in range(1, 3)]
+    ds = xr.open_mfdataset(path_files, mask_and_scale=False, data_vars='minimal')
+    grid = sx.Grid(ds)
+    return grid
+
+
+def test_triangulate_dask(test_out2d_dask):
+    """ Test triangulate_dask """
+    grid_tri = sx.triangulate(test_out2d_dask)
+    assert grid_tri.ds.dims['nSCHISM_hgrid_node'] == 2639
+    assert grid_tri.ds.dims['nSCHISM_hgrid_face'] == 4636
 
 
 def test_read_hgrid_gr3():

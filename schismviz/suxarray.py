@@ -15,9 +15,9 @@ import uxarray as ux
 class Grid(ux.Grid):
     """ uxarray Grid class for SCHISM
     """
-    elem_polygons = None
+    _elem_polygons = None
     elem_strtree = None
-    node_points = None
+    _node_points = None
     node_strtree = None
 
     def __init__(self, dataset, **kwargs):
@@ -47,7 +47,7 @@ class Grid(ux.Grid):
         super().__init__(dataset, **kwargs)
 
     @staticmethod
-    def add_topology_variable(ds, varname="SCHISM"):
+    def add_topology_variable(ds, varname="SCHISM_hgrid"):
         """ Add a dummy mesh_topology variable to a SCHISM out2d dataset
 
         Parameters
@@ -62,8 +62,8 @@ class Grid(ux.Grid):
         ds[varname].attrs['topology_dimension'] = 2
         ds[varname].attrs['node_coordinates'] = "SCHISM_hgrid_node_x SCHISM_hgrid_node_y"
         ds[varname].attrs['face_node_connectivity'] = "SCHISM_hgrid_face_nodes"
+        ds[varname].attrs['Mesh2_layers'] = "zCoordinates"
         ds[varname].attrs['start_index'] = 1
-        ds[varname].attrs['_FillValue'] = -1
         return ds
 
     def build_spatial_trees(self):
@@ -75,7 +75,7 @@ class Grid(ux.Grid):
     def build_elem_spatial_tree(self):
         """ Build spatial tree for the elements of the grid """
         # If the spatial tree is not built yet, build it
-        if self.elem_polygons is None:
+        if self._elem_polygons is None:
             node_x = self.ds[self.ds_var_names['Mesh2_node_x']].values
             node_y = self.ds[self.ds_var_names['Mesh2_node_y']].values
 
@@ -84,23 +84,29 @@ class Grid(ux.Grid):
                 ind = node_indices[node_indices > 0] - 1
                 # Assuming the indices are positional
                 return Polygon(zip(node_x[ind], node_y[ind]))
-            self.elem_polygons = xr.apply_ufunc(create_polygon,
+            self._elem_polygons = xr.apply_ufunc(create_polygon,
                 self.ds[self.ds_var_names['Mesh2_face_nodes']],
                 input_core_dims=((self.ds_var_names['nMaxMesh2_face_nodes'],),),
                 vectorize=True)
-            self.elem_strtree = STRtree(self.elem_polygons.values)
+            self.elem_strtree = STRtree(self._elem_polygons.values)
         return self.elem_strtree
 
-    def build_node_spatial_tree(self):
-        node_x = self.ds[self.ds_var_names['Mesh2_node_x']].values
-        node_y = self.ds[self.ds_var_names['Mesh2_node_y']].values
+    @property
+    def node_points(self):
+        if self._node_points is None:
+            node_x = self.ds[self.ds_var_names['Mesh2_node_x']].values
+            node_y = self.ds[self.ds_var_names['Mesh2_node_y']].values
+            def create_point(node_index):
+                ind = node_index - 1
+                return Point(node_x[ind], node_y[ind])
+            self._node_points = [create_point(i) for i in range(
+                self.ds.dims[self.ds_var_names['nMesh2_node']])]
+        return self._node_points
 
-        def create_point(node_index):
-            ind = node_index - 1
-            return Point(node_x[ind], node_y[ind])
-        self.node_points = [create_point(i) for i in range(
-            self.ds.dims[self.ds_var_names['nMesh2_node']])]
-        self.node_strtree = STRtree(self.node_points)
+    @property
+    def node_spatial_tree(self):
+        if self.node_strtree is None:
+            self.node_strtree = STRtree(self._node_points)
         return self.node_strtree
 
     def find_element_at(self, x, y, predicate='intersects'):
@@ -163,9 +169,10 @@ def triangulate(grid):
         Triangulated grid
     """
     mesh_name = grid.ds_var_names['Mesh2']
-    face_nodes = grid.ds[grid.ds_var_names['Mesh2_face_nodes']]
-    n_face, _ = face_nodes.shape
-    fill_value = grid.ds[mesh_name].attrs["_FillValue"]
+    face_nodes = grid.Mesh2_face_nodes
+
+    n_face = grid.nMesh2_face
+    fill_value = face_nodes.attrs["_FillValue"]
     valid = face_nodes != fill_value
     n_per_row = valid.sum(axis=1)
     n_triangle_per_row = n_per_row - 2
@@ -174,7 +181,7 @@ def triangulate(grid):
 
     def _triangulate(face_ori: np.ndarray, node_ori: np.ndarray,
                      n_triangle_per_row: xr.DataArray) -> np.ndarray:
-        n_triangle = n_triangle_per_row.sum().item()
+        n_triangle = n_triangle_per_row.sum().compute().item()
         n_face = len(face_ori)
         index_first = np.argwhere(np.diff(face_ori, prepend=-1) != 0)
         index_second = index_first + 1
@@ -203,14 +210,14 @@ def triangulate(grid):
     # Drop the original face_nodes variable
     ds_tri = ds_tri.drop_vars(grid.ds_var_names['Mesh2_face_nodes'])
     da_face_nodes = xr.DataArray(data=triangles,
-                           dims=(f"n{mesh_name}_hgrid_face", "three"),
-                           name=f"{mesh_name}_hgrid_face_nodes")
+                           dims=(f"n{mesh_name}_face", "three"),
+                           name=f"{mesh_name}_face_nodes")
     ds_tri[da_face_nodes.name] = da_face_nodes
     da_elem_ind = xr.DataArray(data=triangle_original_ind,
-                               dims=(f"n{mesh_name}_hgrid_face"),
+                               dims=(f"n{mesh_name}_face"),
                                name=f"{mesh_name}_face_original")
     ds_tri[da_elem_ind.name] = da_elem_ind
-    grid_tri = ux.Grid(ds_tri, islation=False, mesh_type="ugrid")
+    grid_tri = Grid(ds_tri, islation=False, mesh_type="ugrid")
     # grid_tri.Mesh2.attrs['start_index'] = 0
     return grid_tri
 
