@@ -9,6 +9,16 @@ import numba
 import xarray as xr
 from shapely.geometry import Polygon, Point
 from shapely.strtree import STRtree
+import vtk
+from vtkmodules.vtkCommonCore import (
+    VTK_DOUBLE,
+    VTK_FLOAT
+)
+from vtkmodules.vtkCommonDataModel import (
+    VTK_QUAD,
+    VTK_TRIANGLE
+)
+from vtk.util import numpy_support
 import uxarray as ux
 
 
@@ -179,6 +189,102 @@ class Grid(ux.Grid):
 
         grid_subset = Grid(ds)
         return grid_subset
+
+    def depth_average(self, var_name):
+        """ Calculate depth-average of a variable
+
+        Parameters
+        ----------
+        var_name : str, required
+            Variable name
+
+        Returns
+        -------
+        da : xr.DataArray
+            Depth averaged variable
+        """
+        @numba.njit
+        def _depth_average(da, zs, dry, k):
+            return np.trapz(da[k - 1:], x=zs[k - 1:]) / (zs[-1] - zs[k - 1]) if dry == 0 else np.nan
+
+        da_da = xr.apply_ufunc(_depth_average,
+                               self.ds[var_name],
+                               self.ds.zCoordinates,
+                               self.ds.dryFlagNode,
+                               self.ds.bottom_index_node,
+                               input_core_dims=[["nSCHISM_vgrid_layers"],
+                                                ["nSCHISM_vgrid_layers"],
+                                                [], []],
+                               dask='parallelized',
+                               vectorize=True,
+                               output_dtypes=[float])
+        return da_da
+
+    def create_vtk_grid(self):
+        """ Create a VTK grid from the grid object
+
+        Parameters
+        ----------
+        var_name : str, required
+            Variable name
+        Returns
+        -------
+        vtk.vtkUnstructuredGrid
+        """
+        # Get he number of nodes
+        n_points = self.nMesh2_node
+        # Create an unstructured grid object
+        vtkgrid = vtk.vtkUnstructuredGrid()
+
+        # Create an empty VTK points (or nodes)
+        points = vtk.vtkPoints()
+        points.SetNumberOfPoints(n_points)
+
+        v_set_point = np.vectorize(lambda i, x, y: points.SetPoint(i, x, y, 0.))
+        v_set_point(np.arange(n_points), self.Mesh2_node_x, self.Mesh2_node_y)
+        vtkgrid.SetPoints(points)
+
+        # Create faces (or cells)
+        # Add VTK cells to the grid
+        def insert_cell(face):
+            if face[-1] < 0:
+                vtkgrid.InsertNextCell(VTK_TRIANGLE, 3, face[:3])
+            else:
+                vtkgrid.InsertNextCell(VTK_QUAD, 4, face[:4])
+
+        [insert_cell(face) for face in (self.Mesh2_face_nodes - 1).values]
+        # xr.apply_ufunc(insert_cell, self.Mesh2_face_nodes - 1,
+        #                input_core_dims=[['nMaxSCHISM_hgrid_face_nodes',]],
+        #                dask='parallelized',
+        #                vectorize=True,
+        #                output_dtypes=[None])
+        return vtkgrid
+
+
+def add_np_array_to_vtk(vtkgrid, np_array, name):
+    """ Add an numpy array values to the VTK data
+    """
+    array = numpy_support.numpy_to_vtk(num_array=np_array,
+                                       deep=True,
+                                       array_type=VTK_FLOAT)
+    array.SetName(name)
+    vtkgrid.GetPointData().AddArray(array)
+
+
+def write_vtk_grid(vtkgrid, fname):
+    """ Write a vtk unstructured grid file
+
+        Parameters
+        ----------
+        ugrid: vtk.vtkUnstructuredGrid
+            VTK unstructured grid data to write
+        fname: str
+            file name to write
+    """
+    writer = vtk.vtkXMLUnstructuredGridWriter()
+    writer.SetFileName(fname)
+    writer.SetInputData(vtkgrid)
+    writer.Write()
 
 
 def renumber(a, fill_value: int = None):
