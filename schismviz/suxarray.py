@@ -87,10 +87,12 @@ class Grid(ux.Grid):
         # If the spatial tree is not built yet, build it
         node_x = self.Mesh2_node_x.values
         node_y = self.Mesh2_node_y.values
+        fill_value = self.Mesh2_face_nodes.attrs['_FillValue']
 
         def create_polygon(node_indices):
             # The node indices are 1-based
-            ind = node_indices[node_indices > 0] - 1
+            valid = node_indices != fill_value
+            ind = node_indices[valid] - 1
             # Assuming the indices are positional
             return Polygon(zip(node_x[ind], node_y[ind]))
         self._elem_polygons = xr.apply_ufunc(create_polygon,
@@ -174,14 +176,16 @@ class Grid(ux.Grid):
         elem_ilocs = self.elem_strtree.query(Polygon, predicate='contains')
 
         face_subset = self.Mesh2_face_nodes[elem_ilocs, :]
+        fill_value = self.Mesh2_face_nodes.attrs['_FillValue']
         node_subset = np.unique(face_subset.where(
             face_subset > 0, drop=True).values).astype(int) - 1
         node_subset.sort()
 
         # TODO Need to slice the edge variable as well.
-        ds = self.ds.sel(nSCHISM_hgrid_node=node_subset, nSCHISM_hgrid_face=elem_ilocs + 1)
-        new_faces = renumber(face_subset.values, -1)
-        da_new_face_nodes = xr.DataArray(new_faces,
+        ds = self.ds.sel(nSCHISM_hgrid_node=node_subset,
+                         nSCHISM_hgrid_face=elem_ilocs)
+        new_face_nodes = renumber_nodes(face_subset.values, fill_value)
+        da_new_face_nodes = xr.DataArray(new_face_nodes,
                                          dims=('nSCHISM_hgrid_face', 'nMaxSCHISM_hgrid_face_nodes'),
                                          attrs=self.Mesh2_face_nodes.attrs)
         # Update the face-nodes connectivity variable
@@ -287,7 +291,7 @@ def write_vtk_grid(vtkgrid, fname):
     writer.Write()
 
 
-def renumber(a, fill_value: int = None):
+def renumber_nodes(a, fill_value: int = None):
     if fill_value is None:
         return _renumber(a)
 

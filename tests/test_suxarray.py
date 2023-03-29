@@ -104,6 +104,7 @@ def test_subset(grid_test_dask):
     polygon = Polygon(([55830, -10401], [56001, -10401], [56001, -10240], [55830, -10240]))
     grid_sub = grid_test_dask.subset(polygon)
     assert grid_sub.ds.dims['nSCHISM_hgrid_face'] == 6
+    assert grid_sub.ds.SCHISM_hgrid_face_nodes.values[0, -1] == grid_sub.ds.SCHISM_hgrid_face_nodes.attrs['_FillValue']
 
 
 def test_depth_average(grid_test_dask):
