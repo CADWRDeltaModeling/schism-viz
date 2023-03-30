@@ -431,7 +431,9 @@ def triangulate(grid):
     # Copy the data from the original grid
     ds_tri = grid.ds.copy()
     # Drop the original face_nodes variable
-    ds_tri = ds_tri.drop_vars(grid.ds_var_names['Mesh2_face_nodes'])
+    varnames_to_drop = ["SCHISM_hgrid_face_nodes", "dryFlagElement",
+                        "SCHISM_hgrid_face_x", "SCHISM_hgrid_face_y"]
+    ds_tri = ds_tri.drop_vars(varnames_to_drop)
     da_face_nodes = xr.DataArray(data=triangles,
                            dims=(f"n{mesh_name}_face", "three"),
                            name=f"{mesh_name}_face_nodes")
