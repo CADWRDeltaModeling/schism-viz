@@ -55,6 +55,11 @@ class Grid(ux.Grid):
             dataset = self.add_topology_variable(dataset)
         # Initialize the super class
         super().__init__(dataset, **kwargs)
+        # Add an optional edge node connectivity variable name
+
+    def __init_ds_var_names__(self):
+        super().__init_ds_var_names__()
+        self.ds_var_names['Mesh2_edge_nodes'] = 'SCHISM_hgrid_edge_nodes'
 
     @staticmethod
     def add_topology_variable(ds, varname="SCHISM_hgrid"):
@@ -72,8 +77,10 @@ class Grid(ux.Grid):
         ds[varname].attrs['topology_dimension'] = 2
         ds[varname].attrs['node_coordinates'] = "SCHISM_hgrid_node_x SCHISM_hgrid_node_y"
         ds[varname].attrs['face_node_connectivity'] = "SCHISM_hgrid_face_nodes"
+        ds[varname].attrs['edge_node_connectivity'] = "SCHISM_hgrid_edge_nodes"
         ds[varname].attrs['Mesh2_layers'] = "zCoordinates"
         ds[varname].attrs['start_index'] = 1
+
         return ds
 
     def build_spatial_trees(self):
@@ -179,11 +186,18 @@ class Grid(ux.Grid):
         fill_value = self.Mesh2_face_nodes.attrs['_FillValue']
         node_subset = np.unique(face_subset.where(
             face_subset > 0, drop=True).values).astype(int) - 1
-        node_subset.sort()
+        # Find edges in the subset
+        # If the two nodes in an edge are in the node_subset, then the edge is in the subset
+        # Select the edges that are in the subset
+        mesh2_edge_nodes = self.ds.SCHISM_hgrid_edge_nodes.values - 1
+        edge_subset_mask = (np.isin(mesh2_edge_nodes[:, 0], node_subset) &
+                       np.isin(mesh2_edge_nodes[:, 1], node_subset))
+        edge_subset = mesh2_edge_nodes[edge_subset_mask, :]
 
         # TODO Need to slice the edge variable as well.
         ds = self.ds.sel(nSCHISM_hgrid_node=node_subset,
-                         nSCHISM_hgrid_face=elem_ilocs)
+                         nSCHISM_hgrid_face=elem_ilocs,
+                         nSCHISM_hgrid_edge=edge_subset_mask)
         new_face_nodes = renumber_nodes(face_subset.values, fill_value)
         da_new_face_nodes = xr.DataArray(new_face_nodes,
                                          dims=('nSCHISM_hgrid_face', 'nMaxSCHISM_hgrid_face_nodes'),
@@ -191,6 +205,29 @@ class Grid(ux.Grid):
         # Update the face-nodes connectivity variable
         ds.update({self.ds_var_names['Mesh2_face_nodes']: da_new_face_nodes})
 
+        # Update the edge-nodes connectivity variable
+        # Replace node indices in the edge connectivity with a node index dictionary
+        node_dict = dict(zip(node_subset, np.arange(1, len(node_subset) + 1)),
+                         dtype=np.int32)
+        node_dict[-1] = -1
+        new_edge_nodes = np.array([[node_dict[n] for n in edge] for edge in edge_subset],
+                                  dtype=np.int32)
+        da_new_edge_nodes = xr.DataArray(new_edge_nodes,
+                                         dims=('nSCHISM_hgrid_edge', 'two'),
+                                         attrs=self.ds.SCHISM_hgrid_edge_nodes.attrs)
+        ds.update({self.ds_var_names['Mesh2_edge_nodes']: da_new_edge_nodes})
+
+        # Add the original node numbers as a variable
+        da_original_node_indices = xr.DataArray(node_subset + 1,
+                                                dims=('nSCHISM_hgrid_node',),
+                                                attrs={'long_name': 'Original node indices',
+                                                       'start_index': 1})
+        ds['SCHISM_hgrid_node_indices'] = da_original_node_indices
+
+        # Add a history
+        ds.attrs['history'] = "Subset by suxarray"
+
+        # Create a suxarray grid and return
         grid_subset = Grid(ds)
         return grid_subset
 
