@@ -244,20 +244,25 @@ class Grid(ux.Grid):
         da : xr.DataArray
             Depth averaged variable
         """
-        @numba.njit
-        def _depth_average(da, zs, dry, k):
-            return np.trapz(da[k - 1:], x=zs[k - 1:]) / (zs[-1] - zs[k - 1]) if dry == 0 else np.nan
+        def _depth_average(v, zs, k, dry):
+            # Select the values with the last index from the bottom index array, k
+            z_bottom = np.take_along_axis(zs, k.reshape(1, -1, 1), axis=-1)
+            depth = zs[:, :, -1] - z_bottom.squeeze(axis=-1)
+            # Mask nan values
+            v = np.ma.masked_invalid(v, copy=False)
+            zs = np.ma.masked_invalid(zs, copy=False)
+            return np.trapz(v, x=zs, axis=-1) / depth
 
         da_da = xr.apply_ufunc(_depth_average,
                                self.ds[var_name],
                                self.ds.zCoordinates,
+                               self.ds.bottom_index_node - 1,
                                self.ds.dryFlagNode,
-                               self.ds.bottom_index_node,
-                               input_core_dims=[["nSCHISM_vgrid_layers"],
-                                                ["nSCHISM_vgrid_layers"],
-                                                [], []],
+                               input_core_dims=[["nSCHISM_vgrid_layers",],
+                                                ["nSCHISM_vgrid_layers",],
+                                                [],
+                                                []],
                                dask='parallelized',
-                               vectorize=True,
                                output_dtypes=[float])
         return da_da
 
