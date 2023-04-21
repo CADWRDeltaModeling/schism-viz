@@ -227,6 +227,9 @@ class Grid(ux.Grid):
         # Add a history
         ds.attrs['history'] = "Subset by suxarray"
 
+        # Remove the face dimension
+        ds = ds.drop_vars("Mesh2_face_dimension")
+
         # Create a suxarray grid and return
         grid_subset = Grid(ds)
         return grid_subset
