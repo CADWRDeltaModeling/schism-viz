@@ -25,10 +25,10 @@ import uxarray as ux
 class Grid(ux.Grid):
     """ uxarray Grid class for SCHISM
     """
-    _elem_polygons = None
-    _elem_strtree = None
+    _face_polygons = None
+    _face_strtree = None
     _node_points = None
-    node_strtree = None
+    _node_strtree = None
 
     def __init__(self, dataset, **kwargs):
         """ Initialize a Grid object
@@ -86,30 +86,36 @@ class Grid(ux.Grid):
     def build_spatial_trees(self):
         """ Build spatial tree for the nodes and the elements of the grid
         """
-        self._elem_strtree = self.build_elem_spatial_tree()
-        self.node_strtree = self.build_node_spatial_tree()
+        self._face_strtree = self.build_elem_spatial_tree()
+        self._node_strtree = self.build_node_spatial_tree()
 
     def build_elem_spatial_tree(self):
         """ Build spatial tree for the elements of the grid """
-        # If the spatial tree is not built yet, build it
-        node_x = self.Mesh2_node_x.values
-        node_y = self.Mesh2_node_y.values
-        fill_value = self.Mesh2_face_nodes.attrs['_FillValue']
+        face_strtree = STRtree(self.face_polygons.values)
+        return face_strtree
 
-        def create_polygon(node_indices):
-            # The node indices are 1-based
-            valid = node_indices != fill_value
-            ind = node_indices[valid] - 1
-            # Assuming the indices are positional
-            return Polygon(zip(node_x[ind], node_y[ind]))
-        self._elem_polygons = xr.apply_ufunc(create_polygon,
-            self.Mesh2_face_nodes,
-            input_core_dims=((self.ds_var_names['nMaxMesh2_face_nodes'],),),
-            dask="parallelized",
-            output_dtypes=[object],
-            vectorize=True)
-        elem_strtree = STRtree(self._elem_polygons.values)
-        return elem_strtree
+    @property
+    def face_polygons(self):
+        if self._face_polygons is None:
+            # If the spatial tree is not built yet, build it
+            node_x = self.Mesh2_node_x.values
+            node_y = self.Mesh2_node_y.values
+            fill_value = self.Mesh2_face_nodes.attrs['_FillValue']
+
+            def create_polygon(node_indices):
+                # The node indices are 1-based
+                valid = node_indices != fill_value
+                ind = node_indices[valid] - 1
+                # Assuming the indices are positional
+                return Polygon(zip(node_x[ind], node_y[ind]))
+
+            self._face_polygons = xr.apply_ufunc(create_polygon,
+                self.Mesh2_face_nodes,
+                input_core_dims=((self.ds_var_names['nMaxMesh2_face_nodes'],),),
+                dask="parallelized",
+                output_dtypes=[object],
+                vectorize=True)
+        return self._face_polygons
 
     @property
     def node_points(self):
@@ -126,15 +132,15 @@ class Grid(ux.Grid):
 
     @property
     def node_spatial_tree(self):
-        if self.node_strtree is None:
-            self.node_strtree = STRtree(self._node_points)
-        return self.node_strtree
+        if self._node_strtree is None:
+            self._node_strtree = STRtree(self._node_points)
+        return self._node_strtree
 
     @property
     def elem_strtree(self):
-        if self._elem_strtree is None:
-            self._elem_strtree = self.build_elem_spatial_tree()
-        return self._elem_strtree
+        if self._face_strtree is None:
+            self._face_strtree = self.build_elem_spatial_tree()
+        return self._face_strtree
 
     def find_element_at(self, x, y, predicate='intersects'):
         """ Find the element that contains the point (x, y)
