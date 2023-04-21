@@ -315,6 +315,34 @@ class Grid(ux.Grid):
         #                output_dtypes=[None])
         return vtkgrid
 
+    def read_vgrid(self, path_vgrid):
+        """ Read a SCHISM vgrid file """
+        with open(path_vgrid, "r") as f:
+            ivcor = int(f.readline().strip())
+            if ivcor != 1:
+                raise NotImplementedError("Only ivcor=1 is implemented")
+            if ivcor == 1:
+                nvrt = int(f.readline().strip())
+        if ivcor == 1:
+            n_nodes = self.Mesh2_node_x.size
+            widths = np.full(n_nodes, 11, dtype=np.int32)
+            widths[0] = 10
+            df_nvrt = pd.read_fwf(path_vgrid,
+                                  header=None, skiprows=2, nrows=1,
+                                  widths=widths,
+                                  dtype=np.int32)
+            self.ds['nvrt'] = xr.DataArray(df_nvrt.values.squeeze(),
+                                          dims=('nSCHISM_hgrid_node',))
+            widths = np.full(n_nodes + 1, 15, dtype=np.int32)
+            widths[0] = 10
+            df_vgrid = pd.read_fwf(path_vgrid,
+                                   header=None, skiprows=3, nrows=nvrt,
+                                   widths=[10] + [15] * n_nodes,
+                                   na_values=-9.,
+                                   dtype=np.float32)
+            self.ds['vgrid'] = xr.DataArray(df_vgrid.iloc[:, 1:].values + 1.0,
+                                            dims=('nSCHISM_vgrid_layers', 'nSCHISM_hgrid_node',))
+
 
 def add_np_array_to_vtk(vtkgrid, np_array, name):
     """ Add an numpy array values to the VTK data
