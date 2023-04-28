@@ -343,6 +343,23 @@ class Grid(ux.Grid):
             self.ds['vgrid'] = xr.DataArray(df_vgrid.iloc[:, 1:].values + 1.0,
                                             dims=('nSCHISM_vgrid_layers', 'nSCHISM_hgrid_node',))
 
+    def compute_face_areas(self):
+        """ Compute face areas
+
+        Though uxarray has its own area calculation, it does not work at the
+        moment for a hybrid grid. This function builds Shapley polygons for
+        faces (elements) and calculates their areas using Shaplely, overriding
+        the uxarray's area calculation.
+
+        Returns
+        -------
+        da_face_areas : xr.DataArray
+            Face areas
+        """
+        ret = xr.apply_ufunc(lambda v: np.vectorize(lambda x: x.area)(
+            v), self.face_polygons, dask="parallelized", output_dtypes=float)
+        return ret
+
 
 def add_np_array_to_vtk(vtkgrid, np_array, name):
     """ Add an numpy array values to the VTK data
