@@ -83,17 +83,6 @@ class Grid(ux.Grid):
 
         return ds
 
-    def build_spatial_trees(self):
-        """ Build spatial tree for the nodes and the elements of the grid
-        """
-        self._face_strtree = self.build_elem_spatial_tree()
-        self._node_strtree = self.build_node_spatial_tree()
-
-    def build_elem_spatial_tree(self):
-        """ Build spatial tree for the elements of the grid """
-        face_strtree = STRtree(self.face_polygons.values)
-        return face_strtree
-
     @property
     def face_polygons(self):
         if self._face_polygons is None:
@@ -120,26 +109,23 @@ class Grid(ux.Grid):
     @property
     def node_points(self):
         if self._node_points is None:
-            node_x = self.ds[self.ds_var_names['Mesh2_node_x']].values
-            node_y = self.ds[self.ds_var_names['Mesh2_node_y']].values
-
-            def create_point(node_index):
-                ind = node_index - 1
-                return Point(node_x[ind], node_y[ind])
-            self._node_points = [create_point(i) for i in range(
-                self.ds.dims[self.ds_var_names['nMesh2_node']])]
+            self._node_points = xr.apply_ufunc(lambda x, y: Point(x, y),
+                                               self.Mesh2_node_x,
+                                               self.Mesh2_node_y,
+                                               vectorize=True,
+                                               dask='parallelized')
         return self._node_points
 
     @property
-    def node_spatial_tree(self):
+    def node_strtree(self):
         if self._node_strtree is None:
-            self._node_strtree = STRtree(self._node_points)
+            self._node_strtree = STRtree(self.node_points)
         return self._node_strtree
 
     @property
     def elem_strtree(self):
         if self._face_strtree is None:
-            self._face_strtree = self.build_elem_spatial_tree()
+            self._face_strtree = STRtree(self.face_polygons.values)
         return self._face_strtree
 
     def find_element_at(self, x, y, predicate='intersects'):
