@@ -516,6 +516,7 @@ def read_hgrid_gr3(path_hgrid):
                                                  attrs={"start_index": 1,
                                                         "cf_role": "face_node_connectivity",
                                                         "_FillValue": -1})
+    ds['depth'] = df_nodes[3].values
     # Add dummy mesh_topology variable
     ds = Grid.add_topology_variable(ds)
 
